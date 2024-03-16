@@ -1,10 +1,21 @@
 const axios = require("axios");
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 
+async function getTmdbIdFromImdbId(imdbId) {
+  const response = await axios.get(
+    `https://api.themoviedb.org/3/find/${imdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c&external_source=imdb_id`
+  );
+  if (response.data.tv_results && response.data.tv_results.length > 0) {
+    return response.data.tv_results[0].id;
+  } else {
+    throw new Error("No TV results found for the given IMDb ID");
+  }
+}
+
 const builder = new addonBuilder({
-  id: "org.ejaddon",
+  id: "org.myaddon",
   version: "1.0.0",
-  name: "Eja Keren",
+  name: "My Addon",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
@@ -15,7 +26,8 @@ builder.defineStreamHandler(async ({ type, id }) => {
   if (type === "movie") {
     url = `https://flixquest-api.vercel.app/vidsrcto/watch-movie?tmdbId=${id}`;
   } else if (type === "series") {
-    const [tmdbId, season, episode] = id.split(":");
+    const [imdbId, season, episode] = id.split(":");
+    const tmdbId = await getTmdbIdFromImdbId(imdbId);
     url = `https://flixquest-api.vercel.app/vidsrcto/watch-tv?tmdbId=${tmdbId}&season=${season}&episode=${episode}`;
   }
 
@@ -25,7 +37,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
     return Promise.resolve({
       streams: sources.map((source) => ({
         url: source.url,
-        title: `source: vidsrcto - ${source.quality}`,
+        title: `🎞️ VidSrcTo - ${source.quality}`,
       })),
     });
   } catch (error) {
