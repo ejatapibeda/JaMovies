@@ -15,7 +15,7 @@ async function getTmdbIdFromImdbId(imdbId) {
 const builder = new addonBuilder({
   id: "org.ejakeren",
   version: "1.0.0",
-  name: "Eja Keren",
+  name: "EjaMovies",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
