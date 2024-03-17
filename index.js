@@ -30,7 +30,16 @@ async function getStreamsVsrcme(url) {
     const response = await axios.get(url);
     const data = response.data;
     let streams = [];
+
     for (const item of data) {
+      if (
+        !item.data ||
+        !item.data.file ||
+        !item.data.file.startsWith("https://")
+      ) {
+        continue;
+      }
+
       streams.push({
         url: item.data.file,
         title: `🎞️ ${item.name} - Auto`,
@@ -69,6 +78,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
       return { streams: await getStreamsVsrcme(url) };
     }
   } catch (error) {
+    // If video not found, try alternative API
     if (type === "movie") {
       url = `https://vsrcme.vercel.app/vsrcme/${id}`;
     } else if (type === "series") {
@@ -87,6 +97,14 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
 const addonInterface = builder.getInterface();
 
-serveHTTP(addonInterface, { port: 7000 });
+serveHTTP(addonInterface, { port: 7001 });
 
 console.log("Addon hosting on http://localhost:7000");
+
+process.on("uncaughtException", function (err) {
+  console.error("Caught exception: ", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
