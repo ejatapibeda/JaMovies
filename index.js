@@ -12,10 +12,41 @@ async function getTmdbIdFromImdbId(imdbId) {
   }
 }
 
+async function getStreamsFlixquest(url) {
+  try {
+    const response = await axios.get(url);
+    const { sources } = response.data;
+    return sources.map((source) => ({
+      url: source.url,
+      title: `🎞️ VidSrcTo - ${source.quality}`,
+    }));
+  } catch (error) {
+    throw new Error("Video not found");
+  }
+}
+
+async function getStreamsVsrcme(url) {
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+    let streams = [];
+    for (const item of data) {
+      streams.push({
+        url: item.data.file,
+        title: `🎞️ ${item.name} - Auto`,
+      });
+    }
+
+    return streams;
+  } catch (error) {
+    throw new Error("Video not found");
+  }
+}
+
 const builder = new addonBuilder({
-  id: "org.ejakeren",
+  id: "org.jamovies",
   version: "1.0.0",
-  name: "EjaMovies",
+  name: "JaMovies",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
@@ -32,16 +63,25 @@ builder.defineStreamHandler(async ({ type, id }) => {
   }
 
   try {
-    const response = await axios.get(url);
-    const { sources } = response.data;
-    return Promise.resolve({
-      streams: sources.map((source) => ({
-        url: source.url,
-        title: `🎞️ VidSrcTo - ${source.quality}`,
-      })),
-    });
+    if (url.includes("flixquest")) {
+      return { streams: await getStreamsFlixquest(url) };
+    } else if (url.includes("vsrcme")) {
+      return { streams: await getStreamsVsrcme(url) };
+    }
   } catch (error) {
-    return Promise.reject();
+    if (type === "movie") {
+      url = `https://vsrcme.vercel.app/vsrcme/${id}`;
+    } else if (type === "series") {
+      const [imdbId, season, episode] = id.split(":");
+      const tmdbId = await getTmdbIdFromImdbId(imdbId);
+      url = `https://vsrcme.vercel.app/vsrcme/${tmdbId}?s=${season}&e=${episode}`;
+    }
+
+    try {
+      return { streams: await getStreamsVsrcme(url) };
+    } catch (error) {
+      return Promise.reject();
+    }
   }
 });
 
