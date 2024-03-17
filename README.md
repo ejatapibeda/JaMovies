@@ -7,7 +7,7 @@ JaMovies is a Stremio addon that provides a variety of movies and TV series acro
 ## Features
 
 - Provides a variety of movies and TV series across different genres.
-- Supports various video qualities, including HD and 4K.
+- Supports various video qualities, including HD and FHD.
 - Regularly updated content.
 
 ## Installation
