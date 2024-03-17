@@ -97,7 +97,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
 const addonInterface = builder.getInterface();
 
-serveHTTP(addonInterface, { port: 7001 });
+serveHTTP(addonInterface, { port: 7000 });
 
 console.log("Addon hosting on http://localhost:7000");
 
