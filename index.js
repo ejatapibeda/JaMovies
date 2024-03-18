@@ -56,6 +56,7 @@ const builder = new addonBuilder({
   id: "org.jamovies",
   version: "1.0.0",
   name: "JaMovies",
+  logo: "https://i.imgur.com/QhZlCx6.jpg",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
