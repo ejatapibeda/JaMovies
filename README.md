@@ -1,4 +1,5 @@
 # JaMovies Stremio Addons
+![JaMovies logo](https://i.imgur.com/bPtIORg.jpeg)
 
 ## Description
 
