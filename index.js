@@ -52,9 +52,28 @@ async function getStreamsVsrcme(url) {
   }
 }
 
+async function getStreamsNewLink(url) {
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+    let streams = [];
+
+    if (data.source && data.source.startsWith("https://")) {
+      streams.push({
+        url: data.source,
+        title: `🎞️ VidSrcTo - Auto`,
+      });
+    }
+
+    return streams;
+  } catch (error) {
+    throw new Error("Video not found");
+  }
+}
+
 const builder = new addonBuilder({
   id: "org.jamovies",
-  version: "1.0.0",
+  version: "1.2.0",
   name: "JaMovies",
   logo: "https://i.imgur.com/QhZlCx6.jpg",
   resources: ["stream"],
@@ -75,32 +94,34 @@ builder.defineStreamHandler(async ({ type, id }) => {
   try {
     if (url.includes("flixquest")) {
       return { streams: await getStreamsFlixquest(url) };
-    } else if (url.includes("vsrcme")) {
-      return { streams: await getStreamsVsrcme(url) };
     }
   } catch (error) {
-    // If video not found, try alternative API
     if (type === "movie") {
-      url = `https://vsrcme.vercel.app/vsrcme/${id}`;
+      url = `https://vidsrc-api-gamma.vercel.app/${id}`;
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
-      const tmdbId = await getTmdbIdFromImdbId(imdbId);
-      url = `https://vsrcme.vercel.app/vsrcme/${tmdbId}?s=${season}&e=${episode}`;
+      url = `https://vidsrc-api-gamma.vercel.app/${imdbId}/${season}/${episode}`;
     }
 
     try {
-      return { streams: await getStreamsVsrcme(url) };
+      return { streams: await getStreamsNewLink(url) };
     } catch (error) {
-      return Promise.reject();
+      if (type === "movie") {
+        url = `https://vsrcme.vercel.app/vsrcme/${id}`;
+      } else if (type === "series") {
+        const [imdbId, season, episode] = id.split(":");
+        const tmdbId = await getTmdbIdFromImdbId(imdbId);
+        url = `https://vsrcme.vercel.app/vsrcme/${tmdbId}?s=${season}&e=${episode}`;
+      }
+
+      try {
+        return { streams: await getStreamsVsrcme(url) };
+      } catch (error) {
+        return Promise.reject();
+      }
     }
   }
 });
-
-const addonInterface = builder.getInterface();
-
-serveHTTP(addonInterface, { port: 7000 });
-
-console.log("Addon hosting on http://localhost:7000");
 
 process.on("uncaughtException", function (err) {
   console.error("Caught exception: ", err);
@@ -109,3 +130,9 @@ process.on("uncaughtException", function (err) {
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
+
+const addonInterface = builder.getInterface();
+
+serveHTTP(addonInterface, { port: 7000 });
+
+console.log("Addon hosting on http://localhost:7000");
