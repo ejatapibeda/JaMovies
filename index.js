@@ -73,7 +73,7 @@ async function getStreamsNewLink(url) {
 
 const builder = new addonBuilder({
   id: "org.jamovies",
-  version: "1.2.0",
+  version: "1.2.1",
   name: "JaMovies",
   logo: "https://i.imgur.com/QhZlCx6.jpg",
   resources: ["stream"],
