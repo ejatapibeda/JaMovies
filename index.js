@@ -97,21 +97,21 @@ builder.defineStreamHandler(async ({ type, id }) => {
     }
   } catch (error) {
     if (type === "movie") {
-      url = `https://vidsrc-api-gamma.vercel.app/${id}`;
+      url = `https://vidsrc-api-bice.vercel.app/${id}`;
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
-      url = `https://vidsrc-api-gamma.vercel.app/${imdbId}/${season}/${episode}`;
+      url = `https://vidsrc-api-bice.vercel.app/${imdbId}/${season}/${episode}`;
     }
 
     try {
       return { streams: await getStreamsNewLink(url) };
     } catch (error) {
       if (type === "movie") {
-        url = `https://vsrcme.vercel.app/vsrcme/${id}`;
+        url = `https://srcvid.vercel.app/vsrcme/${id}`;
       } else if (type === "series") {
         const [imdbId, season, episode] = id.split(":");
         const tmdbId = await getTmdbIdFromImdbId(imdbId);
-        url = `https://vsrcme.vercel.app/vsrcme/${tmdbId}?s=${season}&e=${episode}`;
+        url = `https://srcvid.vercel.app/${tmdbId}?s=${season}&e=${episode}`;
       }
 
       try {
