@@ -100,7 +100,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
       url = `https://vidsrc-api-bice.vercel.app/${id}`;
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
-      url = `https://vidsrc-api-bice.vercel.app/${imdbId}/${season}/${episode}`;
+      url = `https://vidsrc-api-bice.vercel.app/${imdbId}?s=${season}&e=${episode}`;
     }
 
     try {
