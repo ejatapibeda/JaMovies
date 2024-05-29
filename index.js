@@ -1,138 +1,69 @@
+const express = require("express");
 const axios = require("axios");
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const { parse } = require("url");
 
-async function getTmdbIdFromImdbId(imdbId) {
-  const response = await axios.get(
-    `https://api.themoviedb.org/3/find/${imdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c&external_source=imdb_id`
-  );
-  if (response.data.tv_results && response.data.tv_results.length > 0) {
-    return response.data.tv_results[0].id;
-  } else {
-    throw new Error("No TV results found for the given IMDb ID");
-  }
-}
+const app = express();
+const port = process.env.PORT || 3000;
 
-async function getStreamsFlixquest(url) {
-  try {
-    const response = await axios.get(url);
-    const { sources } = response.data;
-    return sources.map((source) => ({
-      url: source.url,
-      title: `🎞️ VidSrcTo - ${source.quality}`,
-    }));
-  } catch (error) {
-    throw new Error("Video not found");
-  }
-}
+function splitM3U(m3uContent, baseUrl) {
+  const resolutions = {
+    "640x360": null,
+    "854x480": null,
+    "1280x720": null,
+    "1920x1080": null,
+    auto: null,
+  };
 
-async function getStreamsVsrcme(url) {
-  try {
-    const response = await axios.get(url);
-    const data = response.data;
-    let streams = [];
+  const lines = m3uContent.split("\n");
+  let currentResolution = null;
 
-    for (const item of data) {
-      if (
-        !item.data ||
-        !item.data.file ||
-        !item.data.file.startsWith("https://")
-      ) {
-        continue;
+  for (const line of lines) {
+    if (line.startsWith("#EXT-X-STREAM-INF:")) {
+      if (line.includes("RESOLUTION=")) {
+        currentResolution = line.split("RESOLUTION=")[1].split(",")[0];
+      } else {
+        currentResolution = "auto";
       }
 
-      streams.push({
-        url: item.data.file,
-        title: `🎞️ ${item.name} - Auto`,
-      });
+      if (currentResolution === "auto") {
+        resolutions[currentResolution] = baseUrl;
+      }
+    } else if (currentResolution) {
+      resolutions[currentResolution] = new URL(line, baseUrl).href;
+      currentResolution = null;
     }
-
-    return streams;
-  } catch (error) {
-    throw new Error("Video not found");
   }
+
+  return resolutions;
 }
 
-async function getStreamsNewLink(url) {
-  try {
-    const response = await axios.get(url);
-    const data = response.data;
-    let streams = [];
+app.use(express.json());
 
-    if (data.source && data.source.startsWith("https://")) {
-      streams.push({
-        url: data.source,
-        title: `🎞️ VidSrcTo - Auto`,
-      });
-    }
+app.post("/split_m3u", async (req, res) => {
+  const { m3u_url: m3uUrl } = req.body;
 
-    return streams;
-  } catch (error) {
-    throw new Error("Video not found");
-  }
-}
-
-const builder = new addonBuilder({
-  id: "org.jamovies",
-  version: "1.2.1",
-  name: "JaMovies",
-  logo: "https://i.imgur.com/QhZlCx6.jpg",
-  resources: ["stream"],
-  types: ["movie", "series"],
-  catalogs: [],
-});
-
-builder.defineStreamHandler(async ({ type, id }) => {
-  let url;
-  if (type === "movie") {
-    url = `https://flixquest-api.vercel.app/vidsrcto/watch-movie?tmdbId=${id}`;
-  } else if (type === "series") {
-    const [imdbId, season, episode] = id.split(":");
-    const tmdbId = await getTmdbIdFromImdbId(imdbId);
-    url = `https://flixquest-api.vercel.app/vidsrcto/watch-tv?tmdbId=${tmdbId}&season=${season}&episode=${episode}`;
+  if (!m3uUrl) {
+    return res.status(400).json({ error: "No m3u_url provided" });
   }
 
   try {
-    if (url.includes("flixquest")) {
-      return { streams: await getStreamsFlixquest(url) };
+    const response = await axios.get(m3uUrl);
+
+    if (response.status !== 200) {
+      return res.status(400).json({ error: "Failed to download M3U file" });
     }
+
+    const m3uContent = response.data;
+    const baseUrl = parse(m3uUrl).href;
+    const resolutions = splitM3U(m3uContent, baseUrl);
+
+    resolutions["auto"] = m3uUrl;
+    return res.json(resolutions);
   } catch (error) {
-    if (type === "movie") {
-      url = `https://vidsrc-api-bice.vercel.app/${id}`;
-    } else if (type === "series") {
-      const [imdbId, season, episode] = id.split(":");
-      url = `https://vidsrc-api-bice.vercel.app/${imdbId}?s=${season}&e=${episode}`;
-    }
-
-    try {
-      return { streams: await getStreamsNewLink(url) };
-    } catch (error) {
-      if (type === "movie") {
-        url = `https://srcvid.vercel.app/vsrcme/${id}`;
-      } else if (type === "series") {
-        const [imdbId, season, episode] = id.split(":");
-        const tmdbId = await getTmdbIdFromImdbId(imdbId);
-        url = `https://srcvid.vercel.app/${tmdbId}?s=${season}&e=${episode}`;
-      }
-
-      try {
-        return { streams: await getStreamsVsrcme(url) };
-      } catch (error) {
-        return Promise.reject();
-      }
-    }
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-process.on("uncaughtException", function (err) {
-  console.error("Caught exception: ", err);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
-});
-
-const addonInterface = builder.getInterface();
-
-serveHTTP(addonInterface, { port: 7000 });
-
-console.log("Addon hosting on http://localhost:7000");
