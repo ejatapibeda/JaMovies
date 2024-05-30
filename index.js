@@ -1,62 +1,45 @@
 const axios = require("axios");
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const {
+  makeProviders,
+  makeStandardFetcher,
+  targets,
+} = require("@movie-web/providers");
 
-async function getTmdbIdFromImdbId(imdbId) {
-  const response = await axios.get(
-    `https://api.themoviedb.org/3/find/${imdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c&external_source=imdb_id`
-  );
-  if (response.data.tv_results && response.data.tv_results.length > 0) {
-    return response.data.tv_results[0].id;
-  } else {
-    throw new Error("No TV results found for the given IMDb ID");
-  }
-}
+const fetcher = makeStandardFetcher(fetch);
+const providers = makeProviders({
+  fetcher: fetcher,
+  target: targets.NATIVE,
+});
 
-async function getStreamsFlixquest(url) {
+async function getTmdbIdFromImdbId(imdbId, type) {
   try {
-    const response = await axios.get(url);
-    const { sources } = response.data;
-    return sources.map((source) => ({
-      url: source.url,
-      title: `🎞️ VidSrcTo - ${source.quality}`,
-    }));
-  } catch (error) {
-    throw new Error("Video not found");
-  }
-}
+    const response = await axios.get(
+      `https://api.themoviedb.org/3/find/${imdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c&external_source=imdb_id`
+    );
 
-async function getStreamsVsrcme(url) {
-  try {
-    const response = await axios.get(url);
-    const data = response.data;
-    let streams = [];
+    const results =
+      type === "movie" ? response.data.movie_results : response.data.tv_results;
 
-    for (const item of data) {
-      if (
-        !item.data ||
-        !item.data.file ||
-        !item.data.file.startsWith("https://")
-      ) {
-        continue;
-      }
-
-      streams.push({
-        url: item.data.file,
-        title: `🎞️ ${item.name} - Auto`,
-      });
+    if (results && results.length > 0) {
+      return results[0].id;
+    } else {
+      throw new Error(
+        `No ${
+          type === "movie" ? "movie" : "TV"
+        } results found for the given IMDb ID`
+      );
     }
-
-    return streams;
   } catch (error) {
-    throw new Error("Video not found");
+    throw new Error(`Error fetching TMDB ID: ${error.message}`);
   }
 }
 
-async function getStreamsNewLink(url) {
+async function getStreams(url) {
   try {
     const response = await axios.get(url);
     const data = response.data;
-    let streams = [];
+    const streams = [];
 
     if (data.source && data.source.startsWith("https://")) {
       streams.push({
@@ -71,9 +54,61 @@ async function getStreamsNewLink(url) {
   }
 }
 
+async function getStreamsFromProvider(imdbId, type, season, episode) {
+  try {
+    const tmdbId = await getTmdbIdFromImdbId(imdbId, type);
+
+    const media = {
+      type: type === "movie" ? "movie" : "show",
+      title: "",
+      releaseYear: "",
+      tmdbId: tmdbId,
+      episode: type === "series" ? { number: episode } : undefined,
+      season: type === "series" ? { number: season } : undefined,
+    };
+
+    if (type === "movie") {
+      const movieResponse = await axios.get(
+        `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c`
+      );
+      const movieData = movieResponse.data;
+
+      media.title = movieData.title;
+      media.releaseYear = movieData.release_date.split("-")[0];
+    } else if (type === "series") {
+      const tvResponse = await axios.get(
+        `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c`
+      );
+      const tvData = tvResponse.data;
+
+      media.title = tvData.name;
+      media.releaseYear = tvData.first_air_date.split("-")[0];
+    }
+
+    const Stream = await providers.runAll({
+      media: media,
+      sourceOrder: ["nsbx"],
+    });
+
+    const qualities = Object.keys(Stream.stream.qualities);
+    const streams = [];
+    qualities.forEach((quality) => {
+      streams.push({
+        url: Stream.stream.qualities[quality].url,
+        title: `🎞️ NSBX - ${quality}`,
+      });
+    });
+
+    return streams;
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    throw new Error("Failed to get streaming links");
+  }
+}
+
 const builder = new addonBuilder({
   id: "org.jamovies",
-  version: "1.2.1",
+  version: "1.2.5",
   name: "JaMovies",
   logo: "https://i.imgur.com/QhZlCx6.jpg",
   resources: ["stream"],
@@ -82,44 +117,17 @@ const builder = new addonBuilder({
 });
 
 builder.defineStreamHandler(async ({ type, id }) => {
-  let url;
-  if (type === "movie") {
-    url = `https://flixquest-api.vercel.app/vidsrcto/watch-movie?tmdbId=${id}`;
-  } else if (type === "series") {
-    const [imdbId, season, episode] = id.split(":");
-    const tmdbId = await getTmdbIdFromImdbId(imdbId);
-    url = `https://flixquest-api.vercel.app/vidsrcto/watch-tv?tmdbId=${tmdbId}&season=${season}&episode=${episode}`;
-  }
-
   try {
-    if (url.includes("flixquest")) {
-      return { streams: await getStreamsFlixquest(url) };
-    }
-  } catch (error) {
+    let url;
     if (type === "movie") {
       url = `https://vidsrc-api-bice.vercel.app/${id}`;
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
       url = `https://vidsrc-api-bice.vercel.app/${imdbId}?s=${season}&e=${episode}`;
     }
-
-    try {
-      return { streams: await getStreamsNewLink(url) };
-    } catch (error) {
-      if (type === "movie") {
-        url = `https://srcvid.vercel.app/vsrcme/${id}`;
-      } else if (type === "series") {
-        const [imdbId, season, episode] = id.split(":");
-        const tmdbId = await getTmdbIdFromImdbId(imdbId);
-        url = `https://srcvid.vercel.app/${tmdbId}?s=${season}&e=${episode}`;
-      }
-
-      try {
-        return { streams: await getStreamsVsrcme(url) };
-      } catch (error) {
-        return Promise.reject();
-      }
-    }
+    return { streams: await getStreams(url) };
+  } catch (error) {
+    return { streams: await getStreamsFromProvider(id, type) };
   }
 });
 
