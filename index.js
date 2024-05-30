@@ -17,7 +17,6 @@ async function getTmdbIdFromImdbId(imdbId, type) {
     const response = await axios.get(
       `https://api.themoviedb.org/3/find/${imdbId}?api_key=7ac6de5ca5060c7504e05da7b218a30c&external_source=imdb_id`
     );
-
     const results =
       type === "movie" ? response.data.movie_results : response.data.tv_results;
 
@@ -127,7 +126,10 @@ builder.defineStreamHandler(async ({ type, id }) => {
     }
     return { streams: await getStreams(url) };
   } catch (error) {
-    return { streams: await getStreamsFromProvider(id, type) };
+    const [imdbId, season, episode] = id.split(":");
+    return {
+      streams: await getStreamsFromProvider(imdbId, type, season, episode),
+    };
   }
 });
 
