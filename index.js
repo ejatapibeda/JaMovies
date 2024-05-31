@@ -34,7 +34,7 @@ async function getTmdbIdFromImdbId(imdbId, type) {
   }
 }
 
-async function getStreams(url) {
+async function getVidsrcStreams(url) {
   try {
     const response = await axios.get(url);
     const data = response.data;
@@ -53,7 +53,7 @@ async function getStreams(url) {
   }
 }
 
-async function getStreamsFromProvider(imdbId, type, season, episode) {
+async function getNsbxStreams(imdbId, type, season, episode) {
   try {
     const tmdbId = await getTmdbIdFromImdbId(imdbId, type);
 
@@ -89,7 +89,11 @@ async function getStreamsFromProvider(imdbId, type, season, episode) {
       sourceOrder: ["nsbx"],
     });
 
-    const qualities = Object.keys(Stream.stream.qualities);
+    const qualityOrder = ['360', '720', '1080', '4k'];
+    const qualities = Object.keys(Stream.stream.qualities).sort((a, b) => {
+      return qualityOrder.indexOf(a) - qualityOrder.indexOf(b);
+    }).reverse();  // Reverse the order
+
     const streams = [];
     qualities.forEach((quality) => {
       streams.push({
@@ -118,17 +122,25 @@ const builder = new addonBuilder({
 builder.defineStreamHandler(async ({ type, id }) => {
   try {
     let url;
+    let vidsrcStreams = [];
+    let nsbxStreams = [];
     if (type === "movie") {
       url = `https://vidsrc-api-bice.vercel.app/${id}`;
+      vidsrcStreams = await getVidsrcStreams(url);
+      const imdbId = id.split(":")[0];
+      nsbxStreams = await getNsbxStreams(imdbId, type);
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
       url = `https://vidsrc-api-bice.vercel.app/${imdbId}?s=${season}&e=${episode}`;
+      vidsrcStreams = await getVidsrcStreams(url);
+      nsbxStreams = await getNsbxStreams(imdbId, type, season, episode);
     }
-    return { streams: await getStreams(url) };
+    return { streams: [...vidsrcStreams, ...nsbxStreams] };
   } catch (error) {
     const [imdbId, season, episode] = id.split(":");
+    const nsbxStreams = await getNsbxStreams(imdbId, type, season, episode);
     return {
-      streams: await getStreamsFromProvider(imdbId, type, season, episode),
+      streams: nsbxStreams,
     };
   }
 });
