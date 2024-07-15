@@ -123,10 +123,10 @@ builder.defineStreamHandler(async ({ type, id }) => {
   try {
     let url;
     if (type === "movie") {
-      url = `https://vidsrc-api-bice.vercel.app/${id}`;
+      url = `https://vidsrcgw.vercel.app/vidsrc/${id}`;
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
-      url = `https://vidsrc-api-bice.vercel.app/${imdbId}?s=${season}&e=${episode}`;
+      url = `https://vidsrcgw.vercel.app/vidsrc/${imdbId}?s=${season}&e=${episode}`;
     }
     return { streams: await getStreams(url) };
   } catch (error) {
