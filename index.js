@@ -38,14 +38,19 @@ async function getStreams(url) {
   try {
     const response = await axios.get(url);
     const data = response.data;
+
     const streams = [];
 
-    if (data.source && data.source.startsWith("https://")) {
-      streams.push({
-        url: data.source,
-        title: `🎞️ VidSrcTo - Auto`,
-      });
-    }
+    data.forEach((item) => {
+      const file = item.data.file;
+
+      if (file && file.startsWith("https://")) {
+        streams.push({
+          url: file,
+          title: `🎞️ VidSrcTo - Auto`,
+        });
+      }
+    });
 
     return streams;
   } catch (error) {
