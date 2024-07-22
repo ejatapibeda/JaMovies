@@ -114,6 +114,24 @@ async function getStreamsFromProvider(imdbId, type, season, episode) {
   }
 }
 
+async function getStreamsFromApieJakeren(url) {
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+
+    const streams = data.map((item) => ({
+      url: item.url,
+      title: `🎞️ ApieJakeren - ${item.quality}`,
+    }));
+
+    return streams;
+  } catch (error) {
+    throw new Error(
+      "Error fetching streams from ApieJakeren: " + error.message
+    );
+  }
+}
+
 const builder = new addonBuilder({
   id: "org.jamovies",
   version: "1.2.5",
@@ -127,13 +145,26 @@ const builder = new addonBuilder({
 builder.defineStreamHandler(async ({ type, id }) => {
   try {
     let url;
+    let apieJakerenUrl;
+
     if (type === "movie") {
       url = `https://vidsrcgw.vercel.app/vidsrc/${id}`;
+      apieJakerenUrl = `https://apiejakeren.vercel.app/movie/${id}`;
+      const vidSrcStreams = await getStreams(url);
+      const apieJakerenStreams = await getStreamsFromApieJakeren(
+        apieJakerenUrl
+      );
+      return { streams: [...vidSrcStreams, ...apieJakerenStreams] };
     } else if (type === "series") {
       const [imdbId, season, episode] = id.split(":");
       url = `https://vidsrcgw.vercel.app/vidsrc/${imdbId}?s=${season}&e=${episode}`;
+      apieJakerenUrl = `https://apiejakeren.vercel.app/tv/season/${season}/episode/${episode}`;
+      const vidSrcStreams = await getStreams(url);
+      const apieJakerenStreams = await getStreamsFromApieJakeren(
+        apieJakerenUrl
+      );
+      return { streams: [...vidSrcStreams, ...apieJakerenStreams] };
     }
-    return { streams: await getStreams(url) };
   } catch (error) {
     console.error("Error in defineStreamHandler:", error.message);
     const [imdbId, season, episode] = id.split(":");
