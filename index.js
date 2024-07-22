@@ -94,18 +94,23 @@ async function getStreamsFromProvider(imdbId, type, season, episode) {
       sourceOrder: ["nsbx"],
     });
 
-    if (!Stream || !Stream.stream || !Stream.stream.qualities) {
+    if (!Stream || !Stream.stream || !Stream.stream.playlist) {
       throw new Error("Invalid stream data received from provider");
     }
+    const playlistUrl = Stream.stream.playlist;
+    const url = new URL(playlistUrl).searchParams.get("url");
 
-    const qualities = Object.keys(Stream.stream.qualities);
-    const streams = [];
-    qualities.forEach((quality) => {
-      streams.push({
-        url: Stream.stream.qualities[quality].url,
-        title: `🎞️ NSBX - ${quality}`,
-      });
-    });
+    if (!url) {
+      throw new Error("URL parameter not found in playlist URL");
+    }
+    const decodedUrl = decodeURIComponent(url);
+
+    const streams = [
+      {
+        url: decodedUrl,
+        title: `🎞️ NSBX - HLS Stream`,
+      },
+    ];
 
     return streams;
   } catch (error) {
@@ -143,35 +148,56 @@ const builder = new addonBuilder({
 });
 
 builder.defineStreamHandler(async ({ type, id }) => {
-  try {
-    let url;
-    let apieJakerenUrl;
+  let streams = [];
+  const [imdbId, season, episode] = id.split(":");
 
-    if (type === "movie") {
-      url = `https://vidsrcgw.vercel.app/vidsrc/${id}`;
-      apieJakerenUrl = `https://apiejakeren.vercel.app/movie/${id}`;
-      const vidSrcStreams = await getStreams(url);
-      const apieJakerenStreams = await getStreamsFromApieJakeren(
-        apieJakerenUrl
-      );
-      return { streams: [...vidSrcStreams, ...apieJakerenStreams] };
-    } else if (type === "series") {
-      const [imdbId, season, episode] = id.split(":");
-      url = `https://vidsrcgw.vercel.app/vidsrc/${imdbId}?s=${season}&e=${episode}`;
-      apieJakerenUrl = `https://apiejakeren.vercel.app/tv/season/${season}/episode/${episode}`;
-      const vidSrcStreams = await getStreams(url);
-      const apieJakerenStreams = await getStreamsFromApieJakeren(
-        apieJakerenUrl
-      );
-      return { streams: [...vidSrcStreams, ...apieJakerenStreams] };
+  try {
+    const providerPromise = getStreamsFromProvider(
+      imdbId,
+      type,
+      season,
+      episode
+    );
+    const apieJakerenUrl =
+      type === "movie"
+        ? `https://apiejakeren.vercel.app/movie/${id}`
+        : `https://apiejakeren.vercel.app/tv/season/${season}/episode/${episode}`;
+    const apieJakerenPromise = getStreamsFromApieJakeren(apieJakerenUrl);
+    const [providerResult, apieJakerenResult] = await Promise.allSettled([
+      providerPromise,
+      apieJakerenPromise,
+    ]);
+
+    if (providerResult.status === "fulfilled") {
+      streams = providerResult.value;
+    }
+
+    if (apieJakerenResult.status === "fulfilled") {
+      streams = [...streams, ...apieJakerenResult.value];
+    }
+    if (streams.length === 0) {
+      try {
+        let url;
+
+        if (type === "movie") {
+          url = `https://vidsrcgw.vercel.app/vidsrc/${id}`;
+        } else if (type === "series") {
+          url = `https://vidsrcgw.vercel.app/vidsrc/${imdbId}?s=${season}&e=${episode}`;
+        }
+
+        if (url) {
+          const vidSrcStreams = await getStreams(url);
+          streams = [...vidSrcStreams];
+        }
+      } catch (fallbackError) {
+        console.error("Error in getStreams:", fallbackError.message);
+      }
     }
   } catch (error) {
-    console.error("Error in defineStreamHandler:", error.message);
-    const [imdbId, season, episode] = id.split(":");
-    return {
-      streams: await getStreamsFromProvider(imdbId, type, season, episode),
-    };
+    console.error("Error in streaming fetch:", error.message);
   }
+
+  return { streams };
 });
 
 process.on("uncaughtException", function (err) {
