@@ -3,7 +3,7 @@ const vidsrcProvider = require("./providers/vidsrc");
 const mwapi = require("./providers/mwapi");
 const apieJakerenProvider = require("./providers/apieJakeren");
 
-const primaryProviders = [vidsrcProvider, mwapi]; // You can change the order or providers here
+const primaryProviders = [mwapi, vidsrcProvider]; // You can change the order or providers here
 const secondaryProviders = [apieJakerenProvider];
 
 const builder = new addonBuilder({
