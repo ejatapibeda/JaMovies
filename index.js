@@ -1,66 +1,64 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const vidsrcProvider = require("./providers/vidsrc");
-const mwapi = require("./providers/mwapi");
-const apieJakerenProvider = require("./providers/apieJakeren");
+const { addonBuilder, getRouter } = require("stremio-addon-sdk");
+const { getStreams } = require("./src/streams");
+const { runWithRequest } = require("./src/origin");
+const play = require("./src/play");
 
-const primaryProviders = [mwapi, vidsrcProvider]; // You can change the order or providers here
-const secondaryProviders = [apieJakerenProvider];
-
-const builder = new addonBuilder({
+const manifest = {
   id: "org.jamovies",
-  version: "1.2.6",
+  version: "2.0.0",
   name: "JaMovies",
+  description: "Stream film dan series lewat scraper nxsha (m3u8 langsung).",
   logo: "https://i.imgur.com/QhZlCx6.jpg",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
-});
+  idPrefixes: ["tt", "tmdb"],
+};
+
+const builder = new addonBuilder(manifest);
 
 builder.defineStreamHandler(async ({ type, id }) => {
-  let streams = [];
-  const [imdbId, season, episode] = id.split(":");
-
-  // Try primary providers first
-  for (const provider of primaryProviders) {
-    try {
-      streams = await provider.getStreams(type, imdbId, season, episode);
-      if (streams.length > 0) break;
-    } catch (error) {
-      console.error(
-        `Error in primary provider ${provider.name}:`,
-        error.message
-      );
-    }
+  const [mediaId, season, episode] = String(id || "").split(":");
+  try {
+    const streams = await getStreams(type, mediaId, season, episode);
+    console.log(`[jamovies] ${type} ${id} -> ${streams.length} stream`);
+    return { streams };
+  } catch (error) {
+    console.error(`[jamovies] ${type} ${id} gagal:`, error.message);
+    return { streams: [] };
   }
-
-  // If no streams found, try secondary providers
-  if (streams.length === 0) {
-    for (const provider of secondaryProviders) {
-      try {
-        streams = await provider.getStreams(type, imdbId, season, episode);
-        if (streams.length > 0) break;
-      } catch (error) {
-        console.error(
-          `Error in secondary provider ${provider.name}:`,
-          error.message
-        );
-      }
-    }
-  }
-
-  return { streams };
-});
-
-process.on("uncaughtException", function (err) {
-  console.error("Caught exception: ", err);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
 const addonInterface = builder.getInterface();
+const router = getRouter(addonInterface);
 
-serveHTTP(addonInterface, { port: 7000 });
+function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+  const path = (req.url || "").split("?")[0];
+  runWithRequest(req, () => {
+    if (path.startsWith("/play/")) {
+      play.handle(req, res);
+      return;
+    }
+    router(req, res, () => {
+      res.statusCode = 404;
+      res.end("Not found");
+    });
+  });
+}
 
-console.log("Addon hosting on http://localhost:7000");
+module.exports = handler;
+
+if (require.main === module) {
+  const http = require("http");
+  const port = Number(process.env.PORT) || 7000;
+  http.createServer(handler).listen(port, () => {
+    console.log(`JaMovies http://localhost:${port}/manifest.json`);
+  });
+}

@@ -1,42 +1,36 @@
-# JaMovies Stremio Addons
-![JaMovies logo](https://i.imgur.com/QhZlCx6.jpg)
+# JaMovies
 
-## Description
+Addon Stremio. Satu sumber: scraper [nxsha.space](https://nxsha.space). Provider lama (VidSrc, MWAPI, ApieJakeren, MovieWeb) sudah dibuang.
 
-JaMovies is a Stremio addon that provides a variety of movies and TV series across different genres. This addon is designed to deliver a smooth and enjoyable viewing experience for Stremio users.
+Stremio mengirim IMDb id. Addon mengubahnya ke TMDB, lalu memanggil `/api/servers` dan `/api/sources` nxsha secara paralel. Tiap link dicek dulu. Playlist harus `#EXTM3U` dan segmen pertamanya harus mengembalikan byte. File langsung `.mp4`, `.mkv`, dan `.webm` juga lolos kalau header videonya valid (`ftyp` atau Matroska). Yang mati tidak dikirim ke Stremio.
 
-## Features
+## Jalankan
 
-- Provides a variety of movies and TV series across different genres.
-- Supports various video qualities, including HD and FHD.
-- Regularly updated content.
+```bash
+npm install
+npm start
+```
 
-## Installation
+Manifest: `http://localhost:7000/manifest.json`
 
-1. Open the Stremio app on your device.
-2. Select the `settings` icon at the top right.
-3. Scroll down and select `Addons`.
-4. In the `Community Addons` section, click `Install from URL`.
-5. Enter the URL of the JaMovies addon and click `Install`.
+Di Stremio: Settings → Addons → Install from URL → tempel URL manifest.
 
-## Self-Hosting on Vercel
+## Env
 
-You can also self-host this addon on Vercel. Here are the steps:
+| Variabel | Fungsi |
+|---|---|
+| `PORT` | Port lokal, default `7000` |
+| `ADDON_URL` | URL publik tanpa slash akhir, misalnya `https://nama.vercel.app`. Kalau kosong, host request yang dipakai. |
+| `TMDB_API_KEY` | Key TMDB untuk IMDb → TMDB. Ada fallback bawaan. |
 
-1. Fork this repository to your own GitHub account.
-2. Create a new project on Vercel and import the forked repository.
-3. Set up the environment variables as needed.
-4. Deploy the project.
+## Struktur
 
-You can also use the button below to deploy this project to Vercel:
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ejatapibeda/JaMovies.git)
-
-
-## Support
-
-If you encounter any issues or have questions about this addon, please open a new issue in this GitHub repository.
-
-## License
-
-This project is licensed under the MIT license. See the `LICENSE` file for more details.
+```
+index.js          addon Stremio + HTTP handler (lokal dan Vercel)
+src/nxsha.js      enkripsi request + klien API nxsha
+src/tmdb.js       IMDb / tmdb: id → TMDB id
+src/streams.js    ubah sumber jadi stream Stremio, cache 10 menit
+src/probe.js      cek playlist + segmen pertama, buang yang mati
+src/play.js       proxy HLS: unwrap, audio, range
+src/origin.js     URL publik untuk Vercel dan lokal
+```
